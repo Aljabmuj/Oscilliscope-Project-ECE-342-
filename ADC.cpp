@@ -119,7 +119,7 @@ void Process_Buffer(AnalogBufferDMA *pabdma, int adc_num){
       
       
       if ((value >= arming_level) && (value >= triggering_level)){
-        // Iv value in trigger fill buffer
+        // If value in trigger fill buffer
         for(int i = 0; i<500; i++){
           buffer0[i] = *pbuffer;
           max0 = max(max0, *pbuffer);

@@ -15,6 +15,9 @@ float[] x1 = new float[500];
 float[] y0 = new float[500];
 float[] y1 = new float[500];
 String amplitude0 = "?";
+float trigger0 = 512;
+float trigger1;
+String trig_s = "?";
 String amplitude1 = "?";
 int inByte; 
 
@@ -23,9 +26,8 @@ int inByte;
 void setup(){
  // Establish screen size
  size(700, 500);
- background(0);
  // Establis port
- myPort = new Serial(this, "/dev/cu.usbmodem137715601", 4608000);
+ myPort = new Serial(this, "/dev/cu.usbmodem137715601", 9600);
  serialEvent(myPort);
 }
 
@@ -37,17 +39,25 @@ void draw(){
   background(0);
   setGraph();
   
+  // Reset intial starting point
+  prevX0 = x0[0];
+  prevX1 = x1[0];
+  prevY0 = y0[0];
+  prevY1 = y1[0];
+  
   // Display points on the graph
   for(int i=0; i<500; i++){
     stroke(255, 255, 204);
     line(prevX1, prevY1, x1[i], y1[i]);
+    prevX1 = x1[i];
+    prevY1 = y1[i];
     stroke(246, 25, 25);
     line(prevX0, prevY0, x0[i], y0[i]);
+    line(margin, trigger0, width-margin, trigger0);
     prevX0 = x0[i];
-    prevX1 = x1[i];
     prevY0 = y0[i];
-    prevY1 = y1[i];
   }
+  
   
   // Display the amplitude of channels
   textSize(12);
@@ -55,11 +65,7 @@ void draw(){
   text(amplitude0, 25, margin + 65);
   text(amplitude1, 25, margin + 215);
   
-  // Reset intial starting point
-  prevX0 = margin;
-  prevX1 = margin;
-  prevY0 = height/2;
-  prevY1 = height/2;
+  
   
   // Tell Arduino it needs more data
   myPort.write('A');
@@ -117,33 +123,47 @@ void serialEvent(Serial myPort){
    String inString = myPort.readStringUntil('\n');
    if (inString != null){
      String[] stringSplit = split(inString, ',');
-     for (int i=0; i<500; i++){
-       int bit = int(stringSplit[i]);
-       if (inByte == 'R'){
+     if (inByte == 'R'){
+       for (int i=0; i<500; i++){
+         int idx = i + 1;
+         int bit = int(stringSplit[idx]);
          y0[i] = map(bit, 0, 1024, margin, height-margin);
          x0[i] = i + margin;
-       }
-       else {
-         y0[i] = height/2;
-         x0[i] = margin;
-       }
-       if (inByte == 'L'){
-         y1[i] = map(bit, 0, 1024, margin, height-margin);
-         x1[i] = i + margin;
-       }
-       else {
          y1[i] = height/2;
          x1[i] = margin;
        }
-     }
-     // Read new amplitudes
-     if (inByte == 'R'){
+       trigger0 = map(int(stringSplit[502]), 0, 1024, margin, height-margin);
        amplitude0 = stringSplit[501];
+       trig_s = stringSplit[502];
      }
      if (inByte == 'L'){
+       for (int i=0; i<500; i++){
+         int idx = i + 1;
+         int bit = int(stringSplit[idx]);
+         y1[i] = map(bit, 0, 1024, margin, height-margin);
+         x1[i] = i + margin;
+         y0[i] = height/2;
+         x0[i] = margin;
+       }
        amplitude1 = stringSplit[501];
      }
-   }
-   }
-  
+     if (inByte == 'C'){
+       for (int i=0; i<500; i++){
+         int idx = i + 1;
+         int bit = int(stringSplit[idx]);
+         y0[i] = map(bit, 0, 1024, margin, height-margin);
+         x0[i] = i + margin;
+         x1[i] = i + margin;
+       }
+       for (int i=500; i<1000; i++){
+         int idx = i + 1;
+         int bit = int(stringSplit[idx]);
+         int idx2 = i - 500;
+         y1[idx2] = map(bit, 0, 1024, margin, height-margin);
+       }
+       amplitude0 = stringSplit[1001];
+       amplitude1 = stringSplit[1002];
+     }
+    }
+ }
 }

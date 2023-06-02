@@ -16,13 +16,15 @@ const uint32_t buffer_size = 20000;
 #define CLK_freq 7
 #define SW_freq 8
 #define channel0 14
-#define channel_0SW 16
+#define channel_0SW 17
 #define channel1 15
-#define channel_1SW 17
+#define channel_1SW 16
 
 // Define varibles/constants for calculations
 int max0 = 0;
 int max1 = 0;
+int min0 = 1024;
+int min1 = 1024;
 float Vpp0 = 0;
 float Vpp1 = 0;
 
@@ -35,8 +37,8 @@ int buffer_dual[1000];
 int trigger_channel = true;
 int voltage_channel = true;
 int freq_channel = true;
-int channel0_on = true;
-int channel1_on = true;
+int channel0_on = false;
+int channel1_on = false;
 int last_trigger;
 int last_voltage;
 int last_freq;
@@ -44,19 +46,24 @@ int current_trigger;
 int current_voltage;
 int current_freq;
 int run = true;
+int value;
+int channel0_offset = 0;
+int channel1_offset = 0;
+
 
 // Define trigger values for channel 1 and 2
 int arming_level0 = 507;
-int triggering_level0 = arming_level0 + 5;
+int triggering_level0 = arming_level0 + 2;
 int arming_level1 = 507;
-int triggering_level1 = arming_level1 + 5;
+int triggering_level1 = arming_level1 + 2;
 
 // Create values fro voltgae scaling, and freq scaling
-int voltage_scalars[] = {0, 10, 50, 100, 200, 300, 400, 500};
+int voltage_scalars[] = {1, 2, 3, 4, 5, 6, 7, 8};
 int voltage_0 = 0;
 int voltage_1 = 0;
 int freq_0 = 1;
 int freq_1 = 1;
+float freq_0_temp;
 
 
 // Allocate memory for both of the adc to write too when sampling
@@ -79,7 +86,8 @@ void setup() {
   // Define baud rate
   Serial.begin(9600);
   // Set pinModes, baud rate, adc, and buffer
-  pinMode(channel0, INPUT_DISABLE);
+  //pinMode(channel0, INPUT_DISABLE);
+  //pinMode(channel1, INPUT_DISABLE);
 
 
   pinMode(SW_trigger, INPUT);
@@ -87,6 +95,8 @@ void setup() {
   attachInterrupt(DT_trigger, trigger_change, CHANGE);
   attachInterrupt(CLK_trigger, trigger_change, CHANGE);
 
+  attachInterrupt(digitalPinToInterrupt(channel_1SW), channel1_cc, FALLING);
+  attachInterrupt(digitalPinToInterrupt(channel_0SW), channel0_cc, FALLING);
 
   pinMode(SW_voltage, INPUT);
   attachInterrupt(digitalPinToInterrupt(SW_voltage), voltage_cc, FALLING);
@@ -138,9 +148,11 @@ void loop() {
        if ((abdma1.interrupted()) && channel0_on){
           Process_Buffer0(&abdma1);
        }
+       if (!channel0_on) Clear_Screen0();
        if ((abdma2.interrupted() && channel1_on)){
           Process_Buffer1(&abdma2);
        }
+       if (!channel1_on) Clear_Screen1();
     }
   }
 }
@@ -166,14 +178,20 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
       // See if value is in trigger
       int value = *pbuffer1;
       max0 = max(max0, value);
+      min0 = min(min0, value);
       
       if ((value >= arming_level0) && (value >= triggering_level0)){
         // If value in trigger fill buffer
         pbuffer1 = pbuffer1 - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          buffer_dual[i] = *pbuffer1;
+          value = *pbuffer1 - 512;
+          value = value * voltage_scalars[voltage_0] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer_dual[i] = value;
           
           max0 = max(max0, *pbuffer1);
+          min0 = min(min0, *pbuffer1);
           pbuffer1=pbuffer1+freq_0;
         }
         break;
@@ -181,29 +199,41 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
       if (pbuffer1 == (end_buffer1 - (250*freq_0))){
         pbuffer1 = pbuffer1 - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          buffer_dual[i] = *pbuffer1;
+          value = *pbuffer1 - 512;
+          value = value * voltage_scalars[voltage_0] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer_dual[i] = value;
           
           max0 = max(max0, *pbuffer1);
+          min0 = min(min0, *pbuffer1);
           pbuffer1=pbuffer1+freq_0;
         }
         break;
       }
     pbuffer1 ++;
   }
+
   pbuffer2 = pbuffer2 + (250 * freq_1);
   while (pbuffer2 < end_buffer2){
 
       // See if value is in trigger
       int value = *pbuffer2;
       max1 = max(max1, value);
+      min1 = min(min1, value);
       
       if ((value >= arming_level1) && (value >= triggering_level1)){
         // If value in trigger fill buffer
         pbuffer2 = pbuffer2 + (250 * freq_1);
         for(int i = 500; i<1000; i++){
-          buffer_dual[i] = *pbuffer2;
-          
+          value = *pbuffer2 - 512;
+          value = value * voltage_scalars[voltage_1] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer_dual[i] = value;
+
           max1 = max(max1, *pbuffer2);
+          min1 = min(min1, *pbuffer2);
           pbuffer2=pbuffer2+freq_1;
         }
         break;
@@ -211,9 +241,14 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
       if (pbuffer2 == (end_buffer2 - (250*freq_1))){
         pbuffer2 = pbuffer2 - (250 * freq_1);
         for(int i = 500; i<1000; i++){
-          buffer_dual[i] = *pbuffer2;
+          value = *pbuffer2 - 512;
+          value = value * voltage_scalars[voltage_1] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer_dual[i] = value;
           
           max1 = max(max1, *pbuffer2);
+          min1 = min(min1, *pbuffer2);
           pbuffer2=pbuffer2+freq_1;
         }
         break;
@@ -222,15 +257,19 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
     pbuffer2 ++;
   }
 
-  // Caclulate peak to peak voltgae
-  Vpp0 = ((max0 * 3.3 * 2)/1023.0) - (2 * 1.65);
+  // Caclulate peak to peak voltage
+  channel0_offset = 512 - (max0 + min0)/2;
+  Vpp0 = (((max0 + channel0_offset) * 3.3 * 2)/1023.0) - (2 * 1.65);
 
-  // Caclulate peak to peak voltgae
-  Vpp1 = ((max1 * 3.3 * 2)/1023.0) - (2 * 1.65);
+  // Caclulate peak to peak voltage
+  channel1_offset = 512 - (max1 + min1)/2;
+  Vpp1 = (((max1 + channel1_offset) * 3.3 * 2)/1023.0) - (2 * 1.65);
 
   Dual_Export();
   max0 = 0;
   max1 = 0;
+  min0 = 1024;
+  min1 = 1024;
   while ((Serial.available() == 0) || (run !=true)){
   }
   // Read and clear interrupt
@@ -244,17 +283,41 @@ void Dual_Export(){
       Serial.print('C');
       Serial.print(',');
 
-      for (int x = 0; x<1000; x++){
-      Serial.print(1024 - buffer_dual[x]);
+      for (int x = 0; x<500; x++){
+      Serial.print(1024 - buffer_dual[x] - channel0_offset);
+      Serial.print(',');
+      }
+      for (int x = 500; x<1000; x++){
+      Serial.print(1024 - buffer_dual[x] - channel1_offset);
       Serial.print(',');
       }
       // Export the peak to peak voltage to Processing
       Serial.print(Vpp0);
       Serial.print(',');
       Serial.print(Vpp1);
-      Serial.println();
+      Serial.print(',');
+      if (trigger_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.print(',');
+      if (voltage_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.print(',');
+      if (freq_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.println(); 
 }
-    
 
 void Process_Buffer0(AnalogBufferDMA *pabdma){
   // Find the start and end address in memory that the buffer stored samples values
@@ -271,51 +334,51 @@ void Process_Buffer0(AnalogBufferDMA *pabdma){
       // See if value is in trigger
       int value = *pbuffer;
       max0 = max(max0, value);
+      min0 = min(min0, value);
       
       if ((value >= arming_level0) && (value >= triggering_level0)){
         // If value in trigger fill buffer
         pbuffer = pbuffer - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          int value = *pbuffer;
-
-          if (value < 512){
-            buffer0[i] = value - voltage_scalars[voltage_0];
-          }
-          else if (value > 512){
-            buffer0[i] = value + voltage_scalars[voltage_0];
-          }
-          else{
-            buffer0[i] = value;
-          }
-
+          value = *pbuffer - 512;
+          value = value * voltage_scalars[voltage_0] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer0[i] = value;
           max0 = max(max0, *pbuffer);
-
+          min0 = min(min0, *pbuffer);
           pbuffer=pbuffer+freq_0;
         }
         break;
       }
-
       if (pbuffer == (end_buffer - (250*freq_0))){
         pbuffer = pbuffer - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          buffer0[i] = *pbuffer;
+          value = *pbuffer - 512;
+          value = value * voltage_scalars[voltage_0] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer0[i] = value;
           max0 = max(max0, *pbuffer);
+          min0 = min(min0, *pbuffer);
           pbuffer=pbuffer+freq_0;
         }
         break;
       }
-
     pbuffer ++;
   }
 
   // Caclulate peak to peak voltgae
-  Vpp0 = ((max0 * 3.3 * 2)/1023.0) - (2 * 1.65);
+  channel0_offset = 512 - (max0 + min0)/2;
+  Vpp0 = (((max0+channel0_offset) * 3.3 * 2)/1023.0) - (2*1.65);
+  
 
   // Export buffer
   ExportBuffer0();
   
   // Reset max and see if Processing needes new data
   max0= 0;
+  min0 = 1024;
   while ((Serial.available() == 0) || (run !=true)){
   }
   // Read and clear interrupt
@@ -328,13 +391,32 @@ void ExportBuffer0(){
       Serial.print('R');
       Serial.print(',');
       for (int x = 0; x<500; x++){
-      Serial.print(1024 - buffer0[x]);
-      Serial.print(',');
+        Serial.print(1024 - buffer0[x] - channel0_offset);
+        Serial.print(',');
       }
       // Export the peak to peak voltage to Processing
       Serial.print(Vpp0);
-      Serial.println();
-    
+      Serial.print(',');
+      if (trigger_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.print(',');
+      if (voltage_channel){
+        Serial.print("Channel 1");      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.print(',');
+      if (freq_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.println(); 
 }
 
 void Process_Buffer1(AnalogBufferDMA *pabdma){
@@ -352,38 +434,50 @@ void Process_Buffer1(AnalogBufferDMA *pabdma){
       // See if value is in trigger
       int value = *pbuffer;
       max1 = max(max1, value);
+      min1 = min(min1, value);
       
       if ((value >= arming_level1) && (value >= triggering_level1)){
         // If value in trigger fill buffer
-
+        pbuffer = pbuffer - (250 * freq_1);
         for(int i = 0; i<500; i++){
-          buffer1[i] = *pbuffer;
+          value = *pbuffer - 512;
+          value = value * voltage_scalars[voltage_1] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer1[i] = value;
           max1 = max(max1, *pbuffer);
+          min1 = min(min1, *pbuffer);
           pbuffer=pbuffer+freq_1;
         }
         break;
       }
-      if (pbuffer == (end_buffer - (250*freq_0))){
-        pbuffer = pbuffer - (250 * freq_0);
+      if (pbuffer == (end_buffer - (250*freq_1))){
+        pbuffer = pbuffer - (250 * freq_1);
         for(int i = 0; i<500; i++){
-          buffer0[i] = *pbuffer;
-          
-          max0 = max(max0, *pbuffer);
-          pbuffer=pbuffer+freq_0;
+          value = *pbuffer - 512;
+          value = value * voltage_scalars[voltage_1] + 512;
+          if (value > 1024) value = 1024;
+          if (value < 0) value = 0;
+          buffer1[i] = *pbuffer;
+          max1 = max(max1, *pbuffer);
+          min1 = min(min1, *pbuffer);
+          pbuffer=pbuffer+freq_1;
         }
         break;
       }
     pbuffer ++;
   }
 
-  // Caclulate peak to peak voltgae
-  Vpp1 = ((max1 * 3.3 * 2)/1023.0) - (2 * 1.65);
+  // Caclulate peak to peak voltage
+  channel1_offset = 512 - (max1 + min1)/2;
+  Vpp1 = (((max1+channel1_offset) * 3.3 * 2)/1023.0) - (2 * 1.65);
 
   // Export buffer
   ExportBuffer1();
   
   // Reset max and see if Processing needes new data
   max1= 0;
+  min1 = 1024;
   while ((Serial.available() == 0) || (run !=true)){
   }
   // Read and clear interrupt
@@ -396,12 +490,33 @@ void ExportBuffer1(){
       Serial.print('L');
       Serial.print(',');
       for (int x = 0; x<500; x++){
-      Serial.print(1024 - buffer1[x]);
+      Serial.print(1024 - buffer1[x] - channel1_offset);
       Serial.print(',');
       }
       // Export the peak to peak voltage to Processing
       Serial.print(Vpp1);
-      Serial.println();
+      Serial.print(',');
+      if (trigger_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.print(',');
+      if (voltage_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.print(',');
+      if (freq_channel){
+        Serial.print("Channel 1");
+      }
+      else{
+        Serial.print("Channel 2");
+      }
+      Serial.println(); 
 }
 
 void establishConnection(){
@@ -432,8 +547,8 @@ void trigger_change(){
       }
     }
   }
-  triggering_level0 = arming_level0 + 5;
-  triggering_level1 = arming_level1 + 5;
+  triggering_level0 = arming_level0 + 2;
+  triggering_level1 = arming_level1 + 2;
   last_trigger = current_trigger;
 }
 
@@ -497,6 +612,49 @@ void freq_cc(){
   freq_channel =! freq_channel;
   delay(15);
 }
+
+void channel1_cc(){
+  channel1_on =! channel1_on;
+  delay(15);
+}
+
+void channel0_cc(){
+  channel0_on =! channel0_on;
+  delay(15);
+}
+
+void Clear_Screen0(){
+  Serial.print('J');
+  Serial.print(',');
+  for (int x = 0; x<500; x++){
+    Serial.print(0);
+    Serial.print(',');
+  }
+  // Export the peak to peak voltage to Processing
+  Serial.print('?');
+  Serial.println();
+  while ((Serial.available() == 0) || (run !=true)){
+  }
+  // Read and clear interrupt
+  int inByte = Serial.read();
+}
+
+void Clear_Screen1(){
+  Serial.print('K');
+  Serial.print(',');
+  for (int x = 0; x<500; x++){
+    Serial.print(0);
+    Serial.print(',');
+  }
+  // Export the peak to peak voltage to Processing
+  Serial.print('?');
+  Serial.println();
+  while ((Serial.available() == 0) || (run !=true)){
+  }
+  // Read and clear interrupt
+  int inByte = Serial.read();
+}
+
 
 
 

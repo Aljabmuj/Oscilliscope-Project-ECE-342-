@@ -149,6 +149,7 @@ void loop() {
           Process_Buffer0(&abdma1);
        }
        if (!channel0_on) Clear_Screen0();
+
        if ((abdma2.interrupted() && channel1_on)){
           Process_Buffer1(&abdma2);
        }
@@ -428,7 +429,7 @@ void Process_Buffer1(AnalogBufferDMA *pabdma){
   if ((uint32_t)pbuffer >= 0x20200000u){
     arm_dcache_delete((void *)pbuffer, sizeof(dma_adc_buff1));
   }
-
+  pbuffer = pbuffer + (250 * freq_1);
   while (pbuffer < end_buffer){
 
       // See if value is in trigger
@@ -458,7 +459,7 @@ void Process_Buffer1(AnalogBufferDMA *pabdma){
           value = value * voltage_scalars[voltage_1] + 512;
           if (value > 1024) value = 1024;
           if (value < 0) value = 0;
-          buffer1[i] = *pbuffer;
+          buffer1[i] = value;
           max1 = max(max1, *pbuffer);
           min1 = min(min1, *pbuffer);
           pbuffer=pbuffer+freq_1;
@@ -468,9 +469,10 @@ void Process_Buffer1(AnalogBufferDMA *pabdma){
     pbuffer ++;
   }
 
-  // Caclulate peak to peak voltage
+  // Caclulate peak to peak voltgae
   channel1_offset = 512 - (max1 + min1)/2;
-  Vpp1 = (((max1+channel1_offset) * 3.3 * 2)/1023.0) - (2 * 1.65);
+  Vpp1 = (((max1+channel1_offset) * 3.3 * 2)/1023.0) - (2*1.65);
+  
 
   // Export buffer
   ExportBuffer1();
@@ -654,7 +656,6 @@ void Clear_Screen1(){
   // Read and clear interrupt
   int inByte = Serial.read();
 }
-
 
 
 

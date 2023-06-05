@@ -1,5 +1,9 @@
 #include <ADC.h>
 #include <AnalogBufferDMA.h>
+#include <iostream>
+#include <math.h>
+#include <SPI.h>
+#include <SD.h>
 
 // Define adc and buffer size
 ADC * adc = new ADC();
@@ -21,6 +25,7 @@ const uint32_t buffer_size = 20000;
 #define channel_1SW 16
 
 // Define varibles/constants for calculations
+int long_press = 500;
 int max0 = 0;
 int max1 = 0;
 int min0 = 1024;
@@ -79,6 +84,7 @@ dma_adc2_buff1[buffer_size];
 DMAMEM static volatile uint16_t __attribute__((aligned(32)))
 dma_adc2_buff2[buffer_size];
 AnalogBufferDMA abdma2(dma_adc2_buff1, buffer_size, dma_adc2_buff2, buffer_size);
+File myFile;
 
 
 // Start set up
@@ -622,7 +628,17 @@ void channel1_cc(){
 }
 
 void channel0_cc(){
-  channel0_on =! channel0_on;
+  int press = millis();
+  int release = millis();
+  while(digitalRead(channel_0SW) == LOW){
+    release = millis();
+  }
+  if(release - press > long_press){
+    CSV0();
+  }
+  else{
+    channel0_on =! channel0_on;
+  }
   delay(15);
 }
 
@@ -656,6 +672,20 @@ void Clear_Screen1(){
   }
   // Read and clear interrupt
   int inByte = Serial.read();
+}
+
+void CSV0(){
+  Serial.print('V');
+  SD.begin(BUILTIN_SDCARD);
+  myFile = SD.open("test.csv", FILE_WRITE);
+  while (!myFile){}
+  for (int x = 0; x<500; x++){
+     Vpp0= ((buffer0[x]+channel1_offset) * 3.3 * 2)/1023.0 - (2*1.65);
+     myFile.print(Vpp0);
+     myFile.print(',');
+     myFile.println(x);
+  }
+  myFile.close();
 }
 
 

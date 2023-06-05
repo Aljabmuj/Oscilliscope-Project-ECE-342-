@@ -148,7 +148,6 @@ void serialEvent(Serial myPort){
        trigger_channel = stringSplit[502];
        voltage_channel = stringSplit[503];
        freq_channel = stringSplit[504];
-       
      }
      if (inByte == 'L'){
        for (int i=0; i<500; i++){
@@ -177,6 +176,10 @@ void serialEvent(Serial myPort){
          x1[i] = margin;
        }
        amplitude1 = stringSplit[501];
+     }
+     if (inByte == 'V'){
+       text("Creating CSV for Channel 0", margin + 100, margin + 100);
+       while (myPort.available()<=0){}
      }
      if (inByte == 'C'){
        for (int i=0; i<500; i++){

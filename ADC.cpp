@@ -185,11 +185,7 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
         // If value in trigger fill buffer
         pbuffer1 = pbuffer1 - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          value = *pbuffer1 - 512;
-          value = value * voltage_scalars[voltage_0] + 512;
-          if (value > 1024) value = 1024;
-          if (value < 0) value = 0;
-          buffer_dual[i] = value;
+          buffer_dual[i] = *pbuffer1;
           
           max0 = max(max0, *pbuffer1);
           min0 = min(min0, *pbuffer1);
@@ -200,11 +196,7 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
       if (pbuffer1 == (end_buffer1 - (250*freq_0))){
         pbuffer1 = pbuffer1 - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          value = *pbuffer1 - 512;
-          value = value * voltage_scalars[voltage_0] + 512;
-          if (value > 1024) value = 1024;
-          if (value < 0) value = 0;
-          buffer_dual[i] = value;
+          buffer_dual[i] = *pbuffer1;
           
           max0 = max(max0, *pbuffer1);
           min0 = min(min0, *pbuffer1);
@@ -214,6 +206,12 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
       }
     pbuffer1 ++;
   }
+  // Caclulate peak to peak voltage
+  channel0_offset = 512 - (max0 + min0)/2;
+  for (int x = 0; x<500; x++){
+    buffer_dual[x] = buffer_dual[x] + channel0_offset;
+  }
+  Vpp0 = (((max0 + channel0_offset) * 3.3 * 2)/1023.0) - (2 * 1.65);
 
   pbuffer2 = pbuffer2 + (250 * freq_1);
   while (pbuffer2 < end_buffer2){
@@ -227,11 +225,7 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
         // If value in trigger fill buffer
         pbuffer2 = pbuffer2 + (250 * freq_1);
         for(int i = 500; i<1000; i++){
-          value = *pbuffer2 - 512;
-          value = value * voltage_scalars[voltage_1] + 512;
-          if (value > 1024) value = 1024;
-          if (value < 0) value = 0;
-          buffer_dual[i] = value;
+          buffer_dual[i] = *pbuffer2;
 
           max1 = max(max1, *pbuffer2);
           min1 = min(min1, *pbuffer2);
@@ -258,12 +252,13 @@ void Dual_Process(AnalogBufferDMA *pabdma1, AnalogBufferDMA *pabdma2){
     pbuffer2 ++;
   }
 
-  // Caclulate peak to peak voltage
-  channel0_offset = 512 - (max0 + min0)/2;
-  Vpp0 = (((max0 + channel0_offset) * 3.3 * 2)/1023.0) - (2 * 1.65);
+  
 
   // Caclulate peak to peak voltage
   channel1_offset = 512 - (max1 + min1)/2;
+  for (int x = 500; x<1000; x++){
+    buffer_dual[x] = buffer_dual[x] + channel1_offset;
+  }
   Vpp1 = (((max1 + channel1_offset) * 3.3 * 2)/1023.0) - (2 * 1.65);
 
   Dual_Export();
@@ -285,12 +280,20 @@ void Dual_Export(){
       Serial.print(',');
 
       for (int x = 0; x<500; x++){
-      Serial.print(1024 - buffer_dual[x] - channel0_offset);
-      Serial.print(',');
+        int value = buffer_dual[x] - 512;
+        value = value*voltage_scalars[voltage_0] + 512;
+        if (value > 1024) value = 1024;
+        if (value < 0) value = 0;
+        Serial.print(1024 - value);
+        Serial.print(',');
       }
       for (int x = 500; x<1000; x++){
-      Serial.print(1024 - buffer_dual[x] - channel1_offset);
-      Serial.print(',');
+        int value = buffer_dual[x] - 512;
+        value = value*voltage_scalars[voltage_1] + 512;
+        if (value > 1024) value = 1024;
+        if (value < 0) value = 0;
+        Serial.print(1024 - value);
+        Serial.print(',');
       }
       // Export the peak to peak voltage to Processing
       Serial.print(Vpp0);
@@ -341,11 +344,7 @@ void Process_Buffer0(AnalogBufferDMA *pabdma){
         // If value in trigger fill buffer
         pbuffer = pbuffer - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          value = *pbuffer - 512;
-          value = value * voltage_scalars[voltage_0] + 512;
-          if (value > 1024) value = 1024;
-          if (value < 0) value = 0;
-          buffer0[i] = value;
+          buffer0[i] = *pbuffer;
           max0 = max(max0, *pbuffer);
           min0 = min(min0, *pbuffer);
           pbuffer=pbuffer+freq_0;
@@ -355,11 +354,7 @@ void Process_Buffer0(AnalogBufferDMA *pabdma){
       if (pbuffer == (end_buffer - (250*freq_0))){
         pbuffer = pbuffer - (250 * freq_0);
         for(int i = 0; i<500; i++){
-          value = *pbuffer - 512;
-          value = value * voltage_scalars[voltage_0] + 512;
-          if (value > 1024) value = 1024;
-          if (value < 0) value = 0;
-          buffer0[i] = value;
+          buffer0[i] = *pbuffer;
           max0 = max(max0, *pbuffer);
           min0 = min(min0, *pbuffer);
           pbuffer=pbuffer+freq_0;
@@ -371,7 +366,10 @@ void Process_Buffer0(AnalogBufferDMA *pabdma){
 
   // Caclulate peak to peak voltgae
   channel0_offset = 512 - (max0 + min0)/2;
-  Vpp0 = (((max0+channel0_offset) * 3.3 * 2)/1023.0) - (2*1.65);
+  for (int x = 0; x<500; x++){
+    buffer0[x] = buffer0[x] + channel0_offset;
+  }
+   Vpp0 = (((max0+channel0_offset) * 3.3 * 2)/1023.0) - (2*1.65);
   
 
   // Export buffer
@@ -392,7 +390,11 @@ void ExportBuffer0(){
       Serial.print('R');
       Serial.print(',');
       for (int x = 0; x<500; x++){
-        Serial.print(1024 - buffer0[x] - channel0_offset);
+        value = buffer0[x] - 512;
+        value = value * voltage_scalars[voltage_0] + 512;
+        if (value > 1024) value = 1024;
+        if (value < 0) value = 0;
+        Serial.print(1024 - value);
         Serial.print(',');
       }
       // Export the peak to peak voltage to Processing
@@ -441,11 +443,7 @@ void Process_Buffer1(AnalogBufferDMA *pabdma){
         // If value in trigger fill buffer
         pbuffer = pbuffer - (250 * freq_1);
         for(int i = 0; i<500; i++){
-          value = *pbuffer - 512;
-          value = value * voltage_scalars[voltage_1] + 512;
-          if (value > 1024) value = 1024;
-          if (value < 0) value = 0;
-          buffer1[i] = value;
+          buffer1[i] = *pbuffer;
           max1 = max(max1, *pbuffer);
           min1 = min(min1, *pbuffer);
           pbuffer=pbuffer+freq_1;
@@ -455,11 +453,7 @@ void Process_Buffer1(AnalogBufferDMA *pabdma){
       if (pbuffer == (end_buffer - (250*freq_1))){
         pbuffer = pbuffer - (250 * freq_1);
         for(int i = 0; i<500; i++){
-          value = *pbuffer - 512;
-          value = value * voltage_scalars[voltage_1] + 512;
-          if (value > 1024) value = 1024;
-          if (value < 0) value = 0;
-          buffer1[i] = value;
+          buffer1[i] = *pbuffer;
           max1 = max(max1, *pbuffer);
           min1 = min(min1, *pbuffer);
           pbuffer=pbuffer+freq_1;
@@ -471,6 +465,9 @@ void Process_Buffer1(AnalogBufferDMA *pabdma){
 
   // Caclulate peak to peak voltgae
   channel1_offset = 512 - (max1 + min1)/2;
+  for (int x = 0; x<500; x++){
+    buffer1[x] = buffer1[x] + channel1_offset;
+  }
   Vpp1 = (((max1+channel1_offset) * 3.3 * 2)/1023.0) - (2*1.65);
   
 
@@ -492,8 +489,12 @@ void ExportBuffer1(){
       Serial.print('L');
       Serial.print(',');
       for (int x = 0; x<500; x++){
-      Serial.print(1024 - buffer1[x] - channel1_offset);
-      Serial.print(',');
+        int value = buffer1[x] - 512;
+        value = value * voltage_scalars[voltage_1] + 512;
+        if (value > 1024) value = 1024;
+        if (value < 0) value = 0;
+        Serial.print(1024 - value);
+        Serial.print(',');
       }
       // Export the peak to peak voltage to Processing
       Serial.print(Vpp1);
@@ -656,6 +657,5 @@ void Clear_Screen1(){
   // Read and clear interrupt
   int inByte = Serial.read();
 }
-
 
 

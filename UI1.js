@@ -15,6 +15,9 @@ float[] x1 = new float[500];
 float[] y0 = new float[500];
 float[] y1 = new float[500];
 String amplitude0 = "?";
+String trigger_channel = "Channel 1";
+String voltage_channel = "Channel 1";
+String freq_channel = "Channel 1";
 float trigger0 = 512;
 float trigger1;
 String trig_s = "?";
@@ -64,6 +67,10 @@ void draw(){
   fill(126);
   text(amplitude0, 25, margin + 65);
   text(amplitude1, 25, margin + 215);
+  textSize(16);
+  text(trigger_channel, margin + 40, height - 50);
+  text(voltage_channel, margin + 250, height - 50);
+  text(freq_channel, margin + 470, height - 50);
   
   
   
@@ -103,6 +110,11 @@ void setGraph(){
   line(margin, 0, margin, 80);
   line(width - margin, 0, width - margin, 80);
   line (margin, 80, width - margin, 80);
+  textSize(16);
+  stroke(126);
+  text("Trigger Channel: ", 20, height - 50);
+  text("Voltage Channel: ", margin + 130, height - 50);
+  text("Frequency Channel: ", margin + 330, height - 50);
 }
 
 
@@ -132,9 +144,11 @@ void serialEvent(Serial myPort){
          y1[i] = height/2;
          x1[i] = margin;
        }
-       trigger0 = map(int(stringSplit[502]), 0, 1024, margin, height-margin);
        amplitude0 = stringSplit[501];
-       trig_s = stringSplit[502];
+       trigger_channel = stringSplit[502];
+       voltage_channel = stringSplit[503];
+       freq_channel = stringSplit[504];
+       
      }
      if (inByte == 'L'){
        for (int i=0; i<500; i++){
@@ -144,6 +158,23 @@ void serialEvent(Serial myPort){
          x1[i] = i + margin;
          y0[i] = height/2;
          x0[i] = margin;
+       }
+       amplitude1 = stringSplit[501];
+       trigger_channel = stringSplit[502];
+       voltage_channel = stringSplit[503];
+       freq_channel = stringSplit[504];
+     }
+     if (inByte == 'J'){
+       for (int i=0; i<500; i++){
+         y0[i] = height/2;
+         x0[i] = margin;
+       }
+       amplitude0 = stringSplit[501];
+     }
+     if (inByte == 'K'){
+       for (int i=0; i<500; i++){
+         y1[i] = height/2;
+         x1[i] = margin;
        }
        amplitude1 = stringSplit[501];
      }
@@ -163,7 +194,11 @@ void serialEvent(Serial myPort){
        }
        amplitude0 = stringSplit[1001];
        amplitude1 = stringSplit[1002];
+       trigger_channel = stringSplit[1003];
+       voltage_channel = stringSplit[1004];
+       freq_channel = stringSplit[1005];
      }
-    }
+    
  }
+}
 }
